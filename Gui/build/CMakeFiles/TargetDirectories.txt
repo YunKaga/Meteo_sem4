@@ -1,5 +1,0 @@
-/mnt/disk2/prog/sem4/ProjectX/Gui/build/CMakeFiles/weather_client.dir
-/mnt/disk2/prog/sem4/ProjectX/Gui/build/CMakeFiles/edit_cache.dir
-/mnt/disk2/prog/sem4/ProjectX/Gui/build/CMakeFiles/rebuild_cache.dir
-/mnt/disk2/prog/sem4/ProjectX/Gui/build/CMakeFiles/weather_client_autogen_timestamp_deps.dir
-/mnt/disk2/prog/sem4/ProjectX/Gui/build/CMakeFiles/weather_client_autogen.dir
