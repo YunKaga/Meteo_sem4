@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # MAC-адреса устройств (замените на свои)
-ELBEAR_MAC="XX:XX:XX:XX:XX:XX"
-ARDUINO_MAC="YY:YY:YY:YY:YY:YY"
+ELBEAR_MAC="98:DA:50:04:2C:30"
+ARDUINO_MAC="98:DA:50:04:2F:B8"
 
 # Функция подключения
 connect_device() {

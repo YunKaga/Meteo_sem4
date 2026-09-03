@@ -95,55 +95,66 @@ void MainWindow::updateDisplay(const QJsonObject &data)
     QJsonObject elbear = data["elbear"].toObject();
     QString lastUpdate = data["last_update"].toString();
     
-    // Update Arduino display
+    // Arduino
     QString arduinoText = QString(
-        "LM75A Temperature: %1 °C\n"
-        "DHT22 Temperature: %2 °C\n"
-        "DHT22 Humidity: %3 %\n"
-        "BMP280 Temperature: %4 °C\n"
-        "BMP280 Pressure: %5 mmHg\n"
-        "Timestamp: %6"
-    ).arg(arduino["lm75a_temp"].isNull() ? "N/A" : QString::number(arduino["lm75a_temp"].toDouble(), 'f', 1))
-     .arg(arduino["dht_temp"].isNull() ? "N/A" : QString::number(arduino["dht_temp"].toDouble(), 'f', 1))
-     .arg(arduino["dht_humidity"].isNull() ? "N/A" : QString::number(arduino["dht_humidity"].toDouble(), 'f', 1))
-     .arg(arduino["bmp_temp"].isNull() ? "N/A" : QString::number(arduino["bmp_temp"].toDouble(), 'f', 1))
-     .arg(arduino["bmp_pressure"].isNull() ? "N/A" : QString::number(arduino["bmp_pressure"].toDouble(), 'f', 1))
+        "Temperature: %1 °C\n"
+        "Humidity: %2 %\n"
+        "Pressure: %3 mmHg\n"
+        "Timestamp: %4"
+    ).arg(arduino["temp"].isNull() ? "N/A" : QString::number(arduino["temp"].toDouble(), 'f', 1))
+     .arg(arduino["humid"].isNull() ? "N/A" : QString::number(arduino["humid"].toDouble(), 'f', 1))
+     .arg(arduino["press"].isNull() ? "N/A" : QString::number(arduino["press"].toDouble(), 'f', 1))
      .arg(arduino["timestamp"].toString());
     
     m_arduinoLabel->setText(arduinoText);
     
-    // Update Elbear display
+    // Elbear
     QString elbearText = QString(
-        "MGS-THP80 Temperature: %1 °C\n"
-        "MGS-THP80 Humidity: %2 %\n"
-        "MGS-THP80 Pressure: %3 mmHg\n"
-        "Wind Speed: %4 m/s\n"
-        "Wind Direction: %5°\n"
-        "Rainfall: %6 mm\n"
-        "Radiation: %7 μSv/h\n"
-        "Light Intensity: %8 lux\n"
-        "Sound Level: %9 dB\n"
-        "Gas Level: %10 ppm\n"
-        "CO Level: %11 ppm\n"
-        "Distance: %12 cm\n"
-        "Timestamp: %13"
-    ).arg(elbear["thp_temp"].isNull() ? "N/A" : QString::number(elbear["thp_temp"].toDouble(), 'f', 1))
-     .arg(elbear["thp_humidity"].isNull() ? "N/A" : QString::number(elbear["thp_humidity"].toDouble(), 'f', 1))
-     .arg(elbear["thp_pressure"].isNull() ? "N/A" : QString::number(elbear["thp_pressure"].toDouble(), 'f', 1))
-     .arg(elbear["wind_speed"].isNull() ? "N/A" : QString::number(elbear["wind_speed"].toDouble(), 'f', 1))
-     .arg(elbear["wind_direction"].isNull() ? "N/A" : QString::number(elbear["wind_direction"].toDouble(), 'f', 1))
-     .arg(elbear["rainfall"].isNull() ? "N/A" : QString::number(elbear["rainfall"].toDouble(), 'f', 1))
-     .arg(elbear["radiation"].isNull() ? "N/A" : QString::number(elbear["radiation"].toDouble(), 'f', 2))
-     .arg(elbear["light_intensity"].isNull() ? "N/A" : QString::number(elbear["light_intensity"].toDouble(), 'f', 1))
-     .arg(elbear["sound_level"].isNull() ? "N/A" : QString::number(elbear["sound_level"].toDouble(), 'f', 1))
-     .arg(elbear["gas_level"].isNull() ? "N/A" : QString::number(elbear["gas_level"].toDouble(), 'f', 2))
-     .arg(elbear["co_level"].isNull() ? "N/A" : QString::number(elbear["co_level"].toDouble(), 'f', 2))
-     .arg(elbear["distance"].isNull() ? "N/A" : QString::number(elbear["distance"].toDouble(), 'f', 1))
+        "=== Environment ===\n"
+        "THP80 Temp: %1 °C\n"
+        "THP80 Hum: %2 %\n"
+        "THP80 Press: %3 mmHg\n"
+        "L75 Light: %4 lux\n"
+        "FR403 Flame: %5\n"
+        "\n"
+        "=== Color (CLM60) ===\n"
+        "R: %6  G: %7  B: %8\n"
+        "Clear: %9  Prox: %10\n"
+        "\n"
+        "=== Motion (A6) ===\n"
+        "Accel: %11, %12, %13 m/s²\n"
+        "Gyro: %14, %15, %16 °/s\n"
+        "\n"
+        "=== Air (CO30) ===\n"
+        "eCO2: %17 ppm\n"
+        "TVOC: %18 ppb\n"
+        "\n"
+        "=== Distance (D20) ===\n"
+        "Distance: %19 mm\n"
+        "\n"
+        "Timestamp: %20"
+    ).arg(elbear["THP80_temp"].isNull() ? "N/A" : QString::number(elbear["THP80_temp"].toDouble(), 'f', 1))
+     .arg(elbear["THP80_hum"].isNull() ? "N/A" : QString::number(elbear["THP80_hum"].toDouble(), 'f', 1))
+     .arg(elbear["THP80_press"].isNull() ? "N/A" : QString::number(elbear["THP80_press"].toDouble(), 'f', 1))
+     .arg(elbear["L75_lux"].isNull() ? "N/A" : QString::number(elbear["L75_lux"].toDouble(), 'f', 1))
+     .arg(elbear["FR403_flame"].isNull() ? "N/A" : elbear["FR403_flame"].toString())
+     .arg(elbear["CLM60_red"].isNull() ? "N/A" : QString::number(elbear["CLM60_red"].toInt()))
+     .arg(elbear["CLM60_green"].isNull() ? "N/A" : QString::number(elbear["CLM60_green"].toInt()))
+     .arg(elbear["CLM60_blue"].isNull() ? "N/A" : QString::number(elbear["CLM60_blue"].toInt()))
+     .arg(elbear["CLM60_clear"].isNull() ? "N/A" : QString::number(elbear["CLM60_clear"].toInt()))
+     .arg(elbear["CLM60_proximity"].isNull() ? "N/A" : QString::number(elbear["CLM60_proximity"].toInt()))
+     .arg(elbear["A6_accel_x"].isNull() ? "N/A" : QString::number(elbear["A6_accel_x"].toDouble(), 'f', 2))
+     .arg(elbear["A6_accel_y"].isNull() ? "N/A" : QString::number(elbear["A6_accel_y"].toDouble(), 'f', 2))
+     .arg(elbear["A6_accel_z"].isNull() ? "N/A" : QString::number(elbear["A6_accel_z"].toDouble(), 'f', 2))
+     .arg(elbear["A6_gyro_x"].isNull() ? "N/A" : QString::number(elbear["A6_gyro_x"].toDouble(), 'f', 2))
+     .arg(elbear["A6_gyro_y"].isNull() ? "N/A" : QString::number(elbear["A6_gyro_y"].toDouble(), 'f', 2))
+     .arg(elbear["A6_gyro_z"].isNull() ? "N/A" : QString::number(elbear["A6_gyro_z"].toDouble(), 'f', 2))
+     .arg(elbear["CO30_eco2"].isNull() ? "N/A" : QString::number(elbear["CO30_eco2"].toInt()))
+     .arg(elbear["CO30_tvoc"].isNull() ? "N/A" : QString::number(elbear["CO30_tvoc"].toInt()))
+     .arg(elbear["D20_distance"].isNull() ? "N/A" : QString::number(elbear["D20_distance"].toInt()))
      .arg(elbear["timestamp"].toString());
     
     m_elbearLabel->setText(elbearText);
-    
-    // Update last update time
     m_lastUpdateLabel->setText("Last update: " + lastUpdate);
 }
 

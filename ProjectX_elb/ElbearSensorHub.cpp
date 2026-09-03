@@ -4,151 +4,162 @@ ElbearSensorHub::ElbearSensorHub() {
 }
 
 void ElbearSensorHub::begin() {
-    // Инициализация Serial для отладки через USB
     Serial.begin(9600);
-    while (!Serial) {
-        delay(10);
-    }
+    while (!Serial) delay(10);
     
-    // Инициализация аппаратного Serial1 для Bluetooth
     Serial1.begin(BLUETOOTH_BAUD);
-    
-    // Инициализация I2C (без мультиплексора!)
     Wire.begin();
-    
-    // Вывод в оба порта
-    Serial.println("=== Elbear Sensor Hub v1.0 (без TCA9548A) ===");
-    Serial.println("Инициализация датчиков...");
-    Serial1.println("Elbear Sensor Hub v1.0");
 
-    // --- MGS-THP80 (BME280) - адрес 0x77 ---
+    Serial.println("=== Elbear Sensor Hub v3.0 (Pure I2C) ===");
+    Serial.println("Инициализация I2C датчиков...");
+    Serial1.println("Elbear Sensor Hub v3.0");
+
+    // BME280 (0x77)
     if (bme280.begin(ADDR_BME280)) {
+        bme280_ok = true;
         Serial.println("[OK] MGS-THP80 (BME280) найден на 0x77");
     } else {
         Serial.println("[FAIL] MGS-THP80 не найден");
     }
 
-    // --- MGS-L75 (BH1750) - адрес 0x23 ---
+    // BH1750 (0x23)
     if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
+        bh1750_ok = true;
         Serial.println("[OK] MGS-L75 (BH1750) найден на 0x23");
     } else {
         Serial.println("[FAIL] MGS-L75 не найден");
     }
 
-    // --- MGS-D20 (VL53L0X) - адрес 0x29 ---
+    // VL53L0X (0x29)
     if (vl53.begin()) {
+        vl53_ok = true;
         Serial.println("[OK] MGS-D20 (VL53L0X) найден на 0x29");
     } else {
         Serial.println("[FAIL] MGS-D20 не найден");
     }
 
-    // --- MGS-CLM60 (APDS-9960) - адрес 0x39 ---
-    if (apds.begin()) {
-        Serial.println("[OK] MGS-CLM60 (APDS-9960) найден на 0x39");
+    // APDS-9960 (0x39) - ПРИОРИТЕТ над датчиком пламени
+    if (apds.begin(ADDR_APDS9960)) {
+        apds_ok = true;
         apds.enableProximity(true);
         apds.enableColor(true);
+        Serial.println("[OK] MGS-CLM60 (APDS-9960) найден на 0x39");
     } else {
         Serial.println("[FAIL] MGS-CLM60 не найден");
     }
+    Serial.println("[INFO] Датчик пламени отключен (конфликт адреса 0x39)");
 
-    // --- MGS-CO30 (SGP30) - адрес 0x58 ---
+    // SGP30 (0x58)
     if (sgp30.begin()) {
-        Serial.println("[OK] MGS-CO30 (SGP30) найден на 0x58");
+        sgp30_ok = true;
         sgp30.setIAQBaseline(0x8973, 0x8AAE);
+        Serial.println("[OK] MGS-CO30 (SGP30) найден на 0x58");
     } else {
         Serial.println("[FAIL] MGS-CO30 не найден");
     }
 
-    // --- MGS-A6 (MPU6050) - адрес 0x69 ---
-    if (mpu.begin()) {
-        Serial.println("[OK] MGS-A6 (MPU6050) найден на 0x69");
+    // MPU6050 (0x69) - ЯВНАЯ передача адреса!
+    if (mpu.begin(ADDR_MPU6050)) {
+        mpu_ok = true;
         mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
         mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+        Serial.println("[OK] MGS-A6 (MPU6050) найден на 0x69");
     } else {
         Serial.println("[FAIL] MGS-A6 не найден");
+        // Пробуем адрес 0x68
+        if (mpu.begin(0x68)) {
+            mpu_ok = true;
+            mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+            mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+            Serial.println("[OK] MGS-A6 (MPU6050) найден на 0x68");
+        }
     }
 
-    // --- MGS-WT1 (протечка) ---
-    pinMode(WT1_PIN, INPUT_PULLUP);
-    Serial.println("[OK] MGS-WT1 (Water Leak) настроен на D3");
-
-    // --- MGS-SND504 (звук) ---
-    pinMode(SND_PIN, INPUT);
-    Serial.println("[OK] MGS-SND504 (Sound) настроен на A0");
-
-    // --- MGS-FR403 (пламя) ---
-    pinMode(FLAME_PIN, INPUT);
-    Serial.println("[OK] MGS-FR403 (Flame) настроен на A1");
-
     Serial.println("===============================");
-    Serial.println("Все датчики инициализированы!");
-    Serial.println("Готов к работе!");
+    Serial.println("Все I2C датчики инициализированы!");
     Serial1.println("Все датчики инициализированы");
 }
 
 void ElbearSensorHub::readAllSensors() {
     String data = "{";
+    bool first = true;
 
-    // 1. MGS-THP80 (BME280) - температура, влажность, давление
-    data += "\"THP80_temp\": " + String(bme280.readTemperature(), 1) + ",";
-    data += "\"THP80_hum\": " + String(bme280.readHumidity(), 1) + ",";
-    data += "\"THP80_press\": " + String(bme280.readPressure() / 133.322, 1) + ",";
-
-    // 2. MGS-L75 (BH1750) - освещённость
-    data += "\"L75_lux\": " + String(lightMeter.readLightLevel(), 1) + ",";
-
-    // 3. MGS-FR403 - датчик пламени (аналоговое значение)
-    data += "\"FR403_flame\": " + String(analogRead(FLAME_PIN)) + ",";
-
-    // 4. MGS-SND504 - датчик звука
-    data += "\"SND504_sound\": " + String(analogRead(SND_PIN)) + ",";
-
-    // 5. MGS-WT1 - протечка воды
-    data += "\"WT1_leak\": " + String(digitalRead(WT1_PIN) == LOW ? "\"WET\"" : "\"DRY\"") + ",";
-
-    // 6. MGS-CLM60 (APDS-9960) - цвет и приближение
-    if (apds.colorDataReady()) {
-        uint16_t r, g, b, c;
-        apds.getColorData(&r, &g, &b, &c);
-        data += "\"CLM60_red\": " + String(r) + ",";
-        data += "\"CLM60_green\": " + String(g) + ",";
-        data += "\"CLM60_blue\": " + String(b) + ",";
-        data += "\"CLM60_clear\": " + String(c) + ",";
-    }
-    data += "\"CLM60_proximity\": " + String(apds.readProximity()) + ",";
-
-    // 7. MGS-A6 (MPU6050) - акселерометр и гироскоп
-    sensors_event_t a, g, temp;
-    mpu.getEvent(&a, &g, &temp);
-    data += "\"A6_accel_x\": " + String(a.acceleration.x, 2) + ",";
-    data += "\"A6_accel_y\": " + String(a.acceleration.y, 2) + ",";
-    data += "\"A6_accel_z\": " + String(a.acceleration.z, 2) + ",";
-    data += "\"A6_gyro_x\": " + String(g.gyro.x, 2) + ",";
-    data += "\"A6_gyro_y\": " + String(g.gyro.y, 2) + ",";
-    data += "\"A6_gyro_z\": " + String(g.gyro.z, 2) + ",";
-
-    // 8. MGS-CO30 (SGP30) - eCO2 и TVOC
-    if (sgp30.IAQmeasure()) {
-        data += "\"CO30_eco2\": " + String(sgp30.eCO2) + ",";
-        data += "\"CO30_tvoc\": " + String(sgp30.TVOC) + ",";
-    } else {
-        data += "\"CO30_eco2\": 0,";
-        data += "\"CO30_tvoc\": 0,";
+    // BME280
+    if (bme280_ok) {
+        if (!first) data += ",";
+        data += "\"THP80_temp\": " + String(bme280.readTemperature(), 1);
+        data += ",\"THP80_hum\": " + String(bme280.readHumidity(), 1);
+        data += ",\"THP80_press\": " + String(bme280.readPressure() / 133.322, 1);
+        first = false;
     }
 
-    // 9. MGS-D20 (VL53L0X) - расстояние
-    VL53L0X_RangingMeasurementData_t measure;
-    vl53.rangingTest(&measure, false);
-    if (measure.RangeStatus != 4) {
-        data += "\"D20_distance\": " + String(measure.RangeMilliMeter);
-    } else {
-        data += "\"D20_distance\": -1";
+    // BH1750
+    if (bh1750_ok) {
+        if (!first) data += ",";
+        data += "\"L75_lux\": " + String(lightMeter.readLightLevel(), 1);
+        first = false;
     }
+
+    // Датчик пламени - отключен
+    if (!first) data += ",";
+    data += "\"FR403_flame\": \"DISABLED_CONFLICT\"";
+    first = false;
+
+    // APDS-9960
+    if (apds_ok) {
+        if (!first) data += ",";
+        if (apds.colorDataReady()) {
+            uint16_t r, g, b, c;
+            apds.getColorData(&r, &g, &b, &c);
+            data += "\"CLM60_red\": " + String(r);
+            data += ",\"CLM60_green\": " + String(g);
+            data += ",\"CLM60_blue\": " + String(b);
+            data += ",\"CLM60_clear\": " + String(c);
+        }
+        data += ",\"CLM60_proximity\": " + String(apds.readProximity());
+        first = false;
+    }
+
+    // MPU6050
+    if (mpu_ok) {
+        if (!first) data += ",";
+        sensors_event_t a, g, temp;
+        mpu.getEvent(&a, &g, &temp);
+        data += "\"A6_accel_x\": " + String(a.acceleration.x, 2);
+        data += ",\"A6_accel_y\": " + String(a.acceleration.y, 2);
+        data += ",\"A6_accel_z\": " + String(a.acceleration.z, 2);
+        data += ",\"A6_gyro_x\": " + String(g.gyro.x, 2);
+        data += ",\"A6_gyro_y\": " + String(g.gyro.y, 2);
+        data += ",\"A6_gyro_z\": " + String(g.gyro.z, 2);
+        first = false;
+    }
+
+    // SGP30
+    if (sgp30_ok) {
+        if (!first) data += ",";
+        if (sgp30.IAQmeasure()) {
+            data += "\"CO30_eco2\": " + String(sgp30.eCO2);
+            data += ",\"CO30_tvoc\": " + String(sgp30.TVOC);
+        } else {
+            data += "\"CO30_eco2\": 0,\"CO30_tvoc\": 0";
+        }
+        first = false;
+    }
+
+    // VL53L0X
+    if (vl53_ok) {
+        if (!first) data += ",";
+        VL53L0X_RangingMeasurementData_t measure;
+        vl53.rangingTest(&measure, false);
+        if (measure.RangeStatus != 4) {
+            data += "\"D20_distance\": " + String(measure.RangeMilliMeter);
+        } else {
+            data += "\"D20_distance\": -1";
+        }
+    }
+
     data += "}";
 
-    // Отправляем JSON через аппаратный Serial1 (Bluetooth)
     Serial1.println(data);
-    
-    // Дублируем в Serial Monitor для отладки
     Serial.println(data);
 }

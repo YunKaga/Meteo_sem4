@@ -1,2 +1,2 @@
-elbear: 98:DA:50:04:2C:30
-mega: 98:DA:50:04:2F:B8
+elbear=98:DA:50:04:2C:30
+mega=98:DA:50:04:2F:B8

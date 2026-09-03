@@ -1,204 +1,201 @@
-import socket
-import time
+#!/usr/bin/env python3
+"""
+Bluetooth клиент для Raspberry Pi
+Использует D-Bus интерфейс BlueZ для подключения к HC-05
+"""
+
+import dbus
+import dbus.service
+import dbus.mainloop.glib
+from gi.repository import GLib
 import threading
-import sqlite3
-import json
+import time
 import logging
-from datetime import datetime
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('bluetooth')
 
-# MAC-адреса устройств (замените на свои)
-DEVICES = {
-    "Elbear": "XX:XX:XX:XX:XX:XX",      # MAC адрес HC-05 на Elbear
-    "ArduinoMega": "YY:YY:YY:YY:YY:YY"  # MAC адрес HC-05 на Arduino Mega
-}
+# SPP UUID для HC-05
+SPP_UUID = "00001101-0000-1000-8000-00805F9B34FB"
 
-class BluetoothReceiver:
-    def __init__(self, db_name="weather.db"):
-        self.db_name = db_name
-        self.init_database()
-        
-    def init_database(self):
-        """Инициализация базы данных SQLite"""
-        conn = sqlite3.connect(self.db_name)
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS sensor_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            device TEXT,
-            raw_data TEXT,
-            temperature REAL,
-            humidity REAL,
-            pressure REAL,
-            light INTEGER,
-            sound INTEGER,
-            flame INTEGER,
-            leak INTEGER,
-            co2 REAL,
-            distance INTEGER,
-            ax INTEGER,
-            ay INTEGER,
-            az INTEGER
-        )''')
-        conn.commit()
-        conn.close()
-        
-    def parse_data(self, device, raw_data):
-        """Парсинг данных от разных устройств"""
-        parsed = {
-            'device': device,
-            'raw_data': raw_data,
-            'temperature': None,
-            'humidity': None,
-            'pressure': None,
-            'light': None,
-            'sound': None,
-            'flame': None,
-            'leak': None,
-            'co2': None,
-            'distance': None,
-            'ax': None,
-            'ay': None,
-            'az': None
-        }
-        
-        # Парсинг данных от Elbear
-        if device == "Elbear":
-            parts = raw_data.split(',')
-            for part in parts:
-                if part.startswith('T:'):
-                    parsed['temperature'] = float(part[2:])
-                elif part.startswith('H:'):
-                    parsed['humidity'] = float(part[2:])
-                elif part.startswith('P:'):
-                    parsed['pressure'] = float(part[2:])
-                elif part.startswith('L:'):
-                    parsed['light'] = int(part[2:])
-                elif part.startswith('SND:'):
-                    parsed['sound'] = int(part[4:])
-                elif part.startswith('FLAME:'):
-                    parsed['flame'] = int(part[6:])
-                elif part.startswith('LEAK:'):
-                    parsed['leak'] = int(part[5:])
-                    
-        # Парсинг данных от Arduino Mega
-        elif device == "ArduinoMega":
-            parts = raw_data.split(',')
-            for part in parts:
-                if part.startswith('AX:'):
-                    parsed['ax'] = int(part[3:])
-                elif part.startswith('AY:'):
-                    parsed['ay'] = int(part[3:])
-                elif part.startswith('AZ:'):
-                    parsed['az'] = int(part[3:])
-                elif part.startswith('CO2:'):
-                    parsed['co2'] = float(part[4:])
-                elif part.startswith('DIST:'):
-                    parsed['distance'] = int(part[5:])
-                    
-        return parsed
+
+class BluetoothDevice:
+    """Класс для работы с Bluetooth устройством через D-Bus"""
     
-    def save_to_database(self, data):
-        """Сохранение распарсенных данных в БД"""
-        conn = sqlite3.connect(self.db_name)
-        c = conn.cursor()
-        c.execute('''INSERT INTO sensor_data 
-            (timestamp, device, raw_data, temperature, humidity, pressure, 
-             light, sound, flame, leak, co2, distance, ax, ay, az)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (datetime.now().isoformat(),
-             data['device'],
-             data['raw_data'],
-             data['temperature'],
-             data['humidity'],
-             data['pressure'],
-             data['light'],
-             data['sound'],
-             data['flame'],
-             data['leak'],
-             data['co2'],
-             data['distance'],
-             data['ax'],
-             data['ay'],
-             data['az']))
-        conn.commit()
-        conn.close()
+    def __init__(self, mac, name, callback):
+        self.mac = mac
+        self.name = name
+        self.callback = callback
+        self.bus = None
+        self.device = None
+        self.device_path = None
+        self.running = False
+        self.connected = False
         
-    def connect_device(self, mac_address, device_name, port=1):
-        """Подключение к Bluetooth устройству через сокет"""
-        while True:
-            sock = None
+    def init_dbus(self):
+        """Инициализация D-Bus соединения"""
+        try:
+            dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+            self.bus = dbus.SystemBus()
+            self.device_path = f"/org/bluez/hci0/dev_{self.mac.replace(':', '_')}"
+            logger.info(f"[{self.name}] D-Bus initialized, path: {self.device_path}")
+            return True
+        except Exception as e:
+            logger.error(f"[{self.name}] D-Bus init error: {e}")
+            return False
+    
+    def get_device(self):
+        """Получить объект устройства"""
+        try:
+            self.device = dbus.Interface(
+                self.bus.get_object('org.bluez', self.device_path),
+                'org.bluez.Device1'
+            )
+            return True
+        except Exception as e:
+            logger.error(f"[{self.name}] Get device error: {e}")
+            return False
+    
+    def connect(self):
+        """Подключиться к устройству"""
+        try:
+            if not self.device:
+                if not self.get_device():
+                    return False
+            
+            logger.info(f"[{self.name}] Connecting to {self.mac}...")
+            self.device.Connect()
+            self.connected = True
+            logger.info(f"[{self.name}] Connected")
+            return True
+        except dbus.exceptions.DBusException as e:
+            logger.error(f"[{self.name}] Connect error: {e}")
+            self.connected = False
+            return False
+        except Exception as e:
+            logger.error(f"[{self.name}] Connect error: {e}")
+            self.connected = False
+            return False
+    
+    def disconnect(self):
+        """Отключиться от устройства"""
+        try:
+            if self.device and self.connected:
+                self.device.Disconnect()
+                self.connected = False
+                logger.info(f"[{self.name}] Disconnected")
+        except Exception as e:
+            logger.error(f"[{self.name}] Disconnect error: {e}")
+    
+    def read_loop(self):
+        """Цикл чтения данных"""
+        self.running = True
+        
+        while self.running:
             try:
-                # Создание RFCOMM сокета
-                sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+                if not self.connected:
+                    if not self.connect():
+                        time.sleep(5)
+                        continue
                 
-                # Подключение
-                logger.info(f"Connecting to {device_name} ({mac_address})...")
-                sock.connect((mac_address, port))
-                logger.info(f"Connected to {device_name}")
+                # Читаем свойства устройства
+                props = dbus.Interface(
+                    self.bus.get_object('org.bluez', self.device_path),
+                    'org.freedesktop.DBus.Properties'
+                )
                 
-                # Настройка таймаута
-                sock.settimeout(1.0)
+                # Проверяем статус подключения
+                connected = props.Get('org.bluez.Device1', 'Connected')
+                if not connected:
+                    logger.warning(f"[{self.name}] Disconnected unexpectedly")
+                    self.connected = False
+                    time.sleep(2)
+                    continue
                 
-                # Буфер для данных
-                buffer = ""
+                # Пробуем читать через subprocess и rfcomm
+                import subprocess
                 
-                while True:
-                    try:
-                        # Чтение данных
-                        data = sock.recv(1024).decode('utf-8', errors='ignore')
-                        if data:
-                            buffer += data
-                            # Разделение по строкам
-                            if '\n' in buffer:
-                                lines = buffer.split('\n')
-                                for line in lines[:-1]:
+                # Находим номер rfcomm устройства
+                rfcomm_num = self._get_rfcomm_number()
+                if rfcomm_num is None:
+                    logger.warning(f"[{self.name}] No rfcomm device found")
+                    time.sleep(2)
+                    continue
+                
+                # Читаем из устройства
+                try:
+                    with open(f'/dev/rfcomm{rfcomm_num}', 'r') as f:
+                        f.settimeout(5.0)
+                        while self.running and self.connected:
+                            try:
+                                line = f.readline()
+                                if line:
                                     line = line.strip()
                                     if line:
-                                        logger.info(f"[{device_name}] {line}")
-                                        parsed = self.parse_data(device_name, line)
-                                        self.save_to_database(parsed)
-                                buffer = lines[-1]
-                    except socket.timeout:
-                        continue
-                    except Exception as e:
-                        logger.error(f"Read error from {device_name}: {e}")
-                        break
-                        
-            except Exception as e:
-                logger.error(f"Connection failed for {device_name}: {e}")
-                time.sleep(5)  # Пауза перед переподключением
-            finally:
-                if sock:
-                    sock.close()
-                    logger.info(f"Disconnected from {device_name}")
+                                        self.callback(self.name, line)
+                            except Exception as e:
+                                logger.error(f"[{self.name}] Read error: {e}")
+                                break
+                except Exception as e:
+                    logger.error(f"[{self.name}] Open rfcomm error: {e}")
+                    time.sleep(2)
                     
-    def start(self):
-        """Запуск всех потоков приёма"""
-        threads = []
-        for device_name, mac_address in DEVICES.items():
-            thread = threading.Thread(
-                target=self.connect_device,
-                args=(mac_address, device_name),
-                daemon=True
-            )
-            thread.start()
-            threads.append(thread)
-            time.sleep(2)  # Пауза между подключениями
-            
-        # Ожидание завершения (бесконечно)
+            except Exception as e:
+                logger.error(f"[{self.name}] Loop error: {e}")
+                time.sleep(5)
+    
+    def _get_rfcomm_number(self):
+        """Найти номер rfcomm устройства для этого MAC"""
         try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("Stopping receiver...")
+            import subprocess
+            result = subprocess.run(
+                ['rfcomm'],
+                capture_output=True,
+                text=True
+            )
+            for line in result.stdout.split('\n'):
+                if self.mac in line:
+                    # Формат: rfcomm0: 98:DA:50:04:2F:B8 channel 1 clean
+                    parts = line.split(':')
+                    if parts:
+                        num_str = parts[0].replace('rfcomm', '').strip()
+                        return int(num_str)
+        except Exception as e:
+            logger.error(f"[{self.name}] Get rfcomm number error: {e}")
+        return None
+    
+    def stop(self):
+        """Остановить чтение"""
+        self.running = False
+        self.disconnect()
 
-if __name__ == "__main__":
-    receiver = BluetoothReceiver()
-    receiver.start()
+
+class BluetoothManager:
+    """Менеджер Bluetooth устройств"""
+    
+    def __init__(self):
+        self.devices = {}
+        self.threads = []
+        
+    def add_device(self, mac, name, callback):
+        """Добавить устройство"""
+        device = BluetoothDevice(mac, name, callback)
+        self.devices[name] = device
+        return device
+    
+    def start_all(self):
+        """Запустить все устройства"""
+        for name, device in self.devices.items():
+            if device.init_dbus():
+                thread = threading.Thread(
+                    target=device.read_loop,
+                    daemon=True
+                )
+                thread.start()
+                self.threads.append(thread)
+                logger.info(f"[{name}] Thread started")
+    
+    def stop_all(self):
+        """Остановить все устройства"""
+        for name, device in self.devices.items():
+            device.stop()
+            logger.info(f"[{name}] Stopped")
