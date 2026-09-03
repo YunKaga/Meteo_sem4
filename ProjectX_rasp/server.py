@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Weather Station Server для Raspberry Pi
 Принимает JSON от Arduino и Elbear через Bluetooth
@@ -26,7 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger('server')
 
 # MAC адреса
-MAC_ARDUINO = "98:DA:50:04:2F:B8"
+MAC_ARDUINO = "98:DA:50:03:A8:14"
 MAC_ELBEAR  = "98:DA:50:04:2C:30"
 
 HTTP_PORT = 5000
