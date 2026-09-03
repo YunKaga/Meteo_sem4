@@ -69,8 +69,9 @@ weather_data = {
 }
 
 # ==================== Bluetooth клиент ====================
+# ==================== Bluetooth клиент ====================
 class BluetoothClient:
-    """Читает данные с HC-05 через rfcomm"""
+    """Читает данные с HC-05 через активное подключение bluetoothctl + rfcomm"""
     
     def __init__(self, mac, name, rfcomm_num):
         self.mac = mac
@@ -78,25 +79,54 @@ class BluetoothClient:
         self.rfcomm_num = rfcomm_num
         self.running = False
         
+    def connect(self):
+        """Активное подключение к устройству"""
+        try:
+            logger.info(f"[{self.name}] Connecting to {self.mac} via bluetoothctl...")
+            
+            # 1. Принудительно подключаемся через bluetoothctl
+            subprocess.run(
+                ['sudo', 'bluetoothctl', 'connect', self.mac],
+                capture_output=True, text=True, timeout=15
+            )
+            time.sleep(2)
+            
+            # 2. Проверяем, удалось ли подключение
+            check = subprocess.run(
+                ['bluetoothctl', 'info', self.mac],
+                capture_output=True, text=True
+            )
+            if "Connected: yes" not in check.stdout:
+                logger.warning(f"[{self.name}] bluetoothctl connection failed.")
+                return False
+                
+            # 3. Привязываем RFCOMM порт для чтения как файл
+            subprocess.run(
+                ['sudo', 'rfcomm', 'bind', str(self.rfcomm_num), self.mac, '1'],
+                capture_output=True, timeout=5
+            )
+            time.sleep(1)
+            
+            logger.info(f"[{self.name}] Successfully connected and bound to /dev/rfcomm{self.rfcomm_num}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[{self.name}] Connection error: {e}")
+            return False
+
     def connect_and_read(self, callback):
-        """Подключение и чтение данных"""
+        """Основной цикл подключения и чтения"""
         self.running = True
         
         while self.running:
             try:
-                # Подключаем rfcomm
-                logger.info(f"[{self.name}] Connecting to {self.mac}...")
-                subprocess.run(
-                    ['sudo', 'rfcomm', 'bind', str(self.rfcomm_num), self.mac, '1'],
-                    capture_output=True,
-                    timeout=10
-                )
+                if not self.connect():
+                    # Если не подключились, ждем и пробуем снова
+                    time.sleep(5)
+                    continue
                 
-                time.sleep(2)
-                
-                # Читаем из устройства
                 device_path = f'/dev/rfcomm{self.rfcomm_num}'
-                logger.info(f"[{self.name}] Reading from {device_path}")
+                logger.info(f"[{self.name}] Opening {device_path} for reading...")
                 
                 with open(device_path, 'r') as f:
                     while self.running:
@@ -107,20 +137,17 @@ class BluetoothClient:
                                 callback(self.name, line)
                                 
             except Exception as e:
-                logger.error(f"[{self.name}] Error: {e}")
-                # Отключаем rfcomm
-                subprocess.run(
-                    ['sudo', 'rfcomm', 'release', str(self.rfcomm_num)],
-                    capture_output=True
-                )
-                time.sleep(5)
+                logger.error(f"[{self.name}] Read/Connection error: {e}")
+            
+            # При ошибке или разрыве связи очищаем состояние и пробуем снова
+            subprocess.run(['sudo', 'bluetoothctl', 'disconnect', self.mac], capture_output=True)
+            subprocess.run(['sudo', 'rfcomm', 'release', str(self.rfcomm_num)], capture_output=True)
+            time.sleep(5)
     
     def stop(self):
         self.running = False
-        subprocess.run(
-            ['sudo', 'rfcomm', 'release', str(self.rfcomm_num)],
-            capture_output=True
-        )
+        subprocess.run(['sudo', 'bluetoothctl', 'disconnect', self.mac], capture_output=True)
+        subprocess.run(['sudo', 'rfcomm', 'release', str(self.rfcomm_num)], capture_output=True)
 
 # ==================== Парсинг данных ====================
 def parse_arduino_json(json_str):
