@@ -37,6 +37,119 @@ weather_data = {
     },
     'last_update': None
 }
+# Добавьте этот класс в server.py (после импортов)
+
+class LCDDisplay:
+    """Класс для работы с LCD дисплеем 16x2 через I2C"""
+    def __init__(self, i2c_bus=1, i2c_addr=0x3F):
+        self.enabled = False
+        try:
+            import smbus2
+            self.bus = smbus2.SMBus(i2c_bus)
+            self.addr = i2c_addr
+            self._init()
+            self.enabled = True
+            logger.info("LCD дисплей инициализирован")
+        except Exception as e:
+            logger.error(f"Ошибка инициализации LCD: {e}")
+            self.enabled = False
+    
+    def _write_byte(self, data, mode=0):
+        """Запись байта в дисплей"""
+        if not self.bus:
+            return
+        try:
+            self.bus.write_byte_data(self.addr, mode, data)
+            time.sleep(0.001)
+        except:
+            pass
+    
+    def _send_command(self, cmd):
+        """Отправка команды"""
+        self._write_byte(cmd, 0x00)
+    
+    def _send_data(self, data):
+        """Отправка данных"""
+        self._write_byte(data, 0x40)
+    
+    def _init(self):
+        """Инициализация дисплея"""
+        time.sleep(0.05)
+        # Последовательность инициализации для HD44780
+        self._send_command(0x33)
+        time.sleep(0.005)
+        self._send_command(0x32)
+        time.sleep(0.005)
+        self._send_command(0x28)  # 4-bit mode, 2 lines, 5x8 font
+        self._send_command(0x0C)  # Display on, cursor off
+        self._send_command(0x06)  # Increment cursor
+        self._send_command(0x01)  # Clear display
+        time.sleep(0.002)
+    
+    def clear(self):
+        """Очистка дисплея"""
+        if self.enabled:
+            self._send_command(0x01)
+            time.sleep(0.002)
+    
+    def set_cursor(self, row, col):
+        """Установка курсора (row: 0 или 1, col: 0-15)"""
+        if not self.enabled:
+            return
+        addr = 0x80 if row == 0 else 0xC0
+        addr += col
+        self._send_command(addr)
+    
+    def write_string(self, text):
+        """Вывод строки"""
+        if not self.enabled:
+            return
+        for char in text[:16]:  # Максимум 16 символов
+            self._send_data(ord(char))
+    
+    def display_data(self, weather_data):
+        """Отображение данных на дисплее"""
+        if not self.enabled:
+            return
+        
+        self.clear()
+        
+        # Первая строка: Arduino данные
+        arduino = weather_data.get('arduino', {})
+        temp = arduino.get('temp')
+        humid = arduino.get('humid')
+        
+        if temp is not None and humid is not None:
+            line1 = f"A:{temp:.1f}C H:{humid:.0f}%"
+        else:
+            line1 = "Arduino: No data"
+        
+        self.set_cursor(0, 0)
+        self.write_string(line1)
+        
+        # Вторая строка: Elbear данные
+        elbear = weather_data.get('elbear', {})
+        temp_e = elbear.get('THP80_temp')
+        press = elbear.get('THP80_press')
+        
+        if temp_e is not None and press is not None:
+            line2 = f"E:{temp_e:.1f}C P:{press:.0f}"
+        else:
+            line2 = "Elbear: No data"
+        
+        self.set_cursor(1, 0)
+        self.write_string(line2)
+
+def lcd_update_loop(lcd, interval=5):
+    """Периодическое обновление LCD дисплея"""
+    logger.info("Запуск цикла обновления LCD")
+    while True:
+        try:
+            lcd.display_data(weather_data)
+            time.sleep(interval)
+        except Exception as e:
+            logger.error(f"Ошибка обновления LCD: {e}")
+            time.sleep(interval)
 
 # ==================== Bluetooth клиент (Serial) ====================
 class BluetoothSerialClient:
@@ -195,6 +308,19 @@ def main():
     # Создаем клиенты для чтения из rfcomm портов
     arduino_bt = BluetoothSerialClient(PORT_ARDUINO, 'Arduino')
     elbear_bt  = BluetoothSerialClient(PORT_ELBEAR,  'Elbear')
+
+    # Инициализация LCD дисплея
+    lcd = LCDDisplay()
+    
+    # Запуск потока обновления LCD
+    if lcd.enabled:
+        lcd_thread = threading.Thread(
+            target=lcd_update_loop,
+            args=(lcd, 5),  # Обновление каждые 5 секунд
+            daemon=True
+        )
+        lcd_thread.start()
+        logger.info("LCD дисплей активен")
 
     # Запускаем потоки чтения
     threading.Thread(target=arduino_bt.connect_and_read, args=(handle_bluetooth_data,), daemon=True).start()
