@@ -37,108 +37,197 @@ weather_data = {
     },
     'last_update': None
 }
-# Добавьте этот класс в server.py (после импортов)
 
-class LCDDisplay:
-    """Класс для работы с LCD дисплеем 16x2 через I2C"""
-    def __init__(self, i2c_bus=1, i2c_addr=0x3F):
+FONT_5x8 = [
+    [0x00,0x00,0x00,0x00,0x00],[0x00,0x00,0x2F,0x00,0x00],[0x00,0x07,0x00,0x07,0x00],[0x14,0x7F,0x14,0x7F,0x14],
+    [0x24,0x2A,0x7F,0x2A,0x12],[0x23,0x13,0x08,0x64,0x62],[0x36,0x49,0x55,0x22,0x50],[0x00,0x05,0x03,0x00,0x00],
+    [0x00,0x1C,0x22,0x41,0x00],[0x00,0x41,0x22,0x1C,0x00],[0x14,0x08,0x3E,0x08,0x14],[0x08,0x08,0x3E,0x08,0x08],
+    [0x00,0x50,0x30,0x00,0x00],[0x08,0x08,0x08,0x08,0x08],[0x00,0x30,0x30,0x00,0x00],[0x20,0x10,0x08,0x04,0x02],
+    [0x3E,0x51,0x49,0x45,0x3E],[0x00,0x42,0x7F,0x40,0x00],[0x42,0x61,0x51,0x49,0x46],[0x21,0x41,0x45,0x4B,0x31],
+    [0x18,0x14,0x12,0x7F,0x10],[0x27,0x45,0x45,0x45,0x39],[0x3C,0x4A,0x49,0x49,0x30],[0x01,0x71,0x09,0x05,0x03],
+    [0x36,0x49,0x49,0x49,0x36],[0x06,0x49,0x49,0x29,0x1E],[0x00,0x36,0x36,0x00,0x00],[0x00,0x56,0x36,0x00,0x00],
+    [0x08,0x14,0x22,0x41,0x00],[0x14,0x14,0x14,0x14,0x14],[0x00,0x41,0x22,0x14,0x08],[0x02,0x01,0x51,0x09,0x06],
+    [0x32,0x49,0x79,0x41,0x3E],[0x7E,0x11,0x11,0x11,0x7E],[0x7F,0x49,0x49,0x49,0x36],[0x3E,0x41,0x41,0x41,0x22],
+    [0x7F,0x41,0x41,0x22,0x1C],[0x7F,0x49,0x49,0x49,0x41],[0x7F,0x09,0x09,0x09,0x01],[0x3E,0x41,0x49,0x49,0x7A],
+    [0x7F,0x08,0x08,0x08,0x7F],[0x00,0x41,0x7F,0x41,0x00],[0x20,0x40,0x41,0x3F,0x01],[0x7F,0x08,0x14,0x22,0x41],
+    [0x7F,0x40,0x40,0x40,0x40],[0x7F,0x02,0x0C,0x02,0x7F],[0x7F,0x04,0x08,0x10,0x7F],[0x3E,0x41,0x41,0x41,0x3E],
+    [0x3F,0x09,0x09,0x09,0x06],[0x3E,0x41,0x51,0x21,0x5E],[0x7F,0x09,0x19,0x29,0x46],[0x46,0x49,0x49,0x49,0x31],
+    [0x01,0x01,0x7F,0x01,0x01],[0x3F,0x40,0x40,0x40,0x3F],[0x1F,0x20,0x40,0x20,0x1F],[0x3F,0x40,0x30,0x40,0x3F],
+    [0x63,0x14,0x08,0x14,0x63],[0x07,0x08,0x70,0x08,0x07],[0x61,0x51,0x49,0x45,0x43],[0x00,0x7F,0x41,0x41,0x00],
+    [0x02,0x04,0x08,0x10,0x20],[0x00,0x41,0x41,0x7F,0x00],[0x04,0x02,0x01,0x02,0x04],[0x40,0x40,0x40,0x40,0x40],
+    [0x00,0x01,0x02,0x04,0x00],[0x20,0x54,0x54,0x54,0x78],[0x7F,0x50,0x48,0x48,0x30],[0x38,0x44,0x44,0x44,0x20],
+    [0x38,0x44,0x44,0x48,0x7F],[0x38,0x54,0x54,0x54,0x18],[0x08,0x7E,0x09,0x01,0x02],[0x0C,0x52,0x52,0x52,0x3E],
+    [0x7F,0x08,0x04,0x04,0x78],[0x00,0x44,0x7D,0x40,0x00],[0x20,0x40,0x44,0x3D,0x00],[0x7F,0x10,0x28,0x44,0x00],
+    [0x00,0x41,0x7F,0x40,0x00],[0x7C,0x04,0x18,0x04,0x78],[0x7C,0x08,0x04,0x04,0x78],[0x38,0x44,0x44,0x44,0x38],
+    [0x7C,0x14,0x14,0x14,0x08],[0x08,0x14,0x14,0x08,0x7C],[0x7C,0x08,0x04,0x04,0x08],[0x48,0x54,0x54,0x54,0x20],
+    [0x04,0x3F,0x44,0x40,0x20],[0x3C,0x40,0x40,0x20,0x7C],[0x1C,0x20,0x40,0x20,0x1C],[0x3C,0x40,0x30,0x40,0x3C],
+    [0x44,0x28,0x10,0x28,0x44],[0x0C,0x50,0x50,0x50,0x3C],[0x44,0x64,0x54,0x4C,0x44],[0x00,0x08,0x36,0x41,0x00],
+    [0x00,0x00,0x7F,0x00,0x00],[0x00,0x41,0x36,0x08,0x00],[0x30,0x08,0x10,0x20,0x18],[0x7F,0x55,0x49,0x55,0x7F]
+]
+
+class GraphicalLCDDisplay:
+    """Класс для работы с графическим LCD 128x64 (KS0108) через I2C расширитель MCP23017"""
+    
+    # Регистры MCP23017
+    IODIRA = 0x00
+    IODIRB = 0x01
+    GPIOA  = 0x12
+    GPIOB  = 0x13
+
+    # Пины порта A (Управление) - согласно вашей схеме из C++ кода
+    LCD_LIGHT  = 0x01
+    LCD_CS1    = 0x04  # Левая половина экрана
+    LCD_CS2    = 0x08  # Правая половина экрана
+    LCD_RESET  = 0x10
+    LCD_DATA   = 0x20  # 1 = данные, 0 = команда
+    LCD_ENABLE = 0x80
+
+    # Команды KS0108
+    LCD_ON       = 0x3F
+    LCD_SET_ADD  = 0x40  # Адрес X (0-63)
+    LCD_SET_PAGE = 0xB8  # Страница Y (0-7, по 8 пикселей)
+
+    def __init__(self, i2c_bus=1, i2c_addr=0x20):
         self.enabled = False
+        self.addr = i2c_addr
+        
         try:
             import smbus2
             self.bus = smbus2.SMBus(i2c_bus)
-            self.addr = i2c_addr
-            self._init()
+            
+            # Настраиваем порты A и B на выход
+            self.bus.write_byte_data(self.addr, self.IODIRA, 0x00)
+            self.bus.write_byte_data(self.addr, self.IODIRB, 0x00)
+            
+            # Аппаратный сброс (дергаем RESET)
+            self._write_port_a(0x00)
+            time.sleep(0.01)
+            self._write_port_a(self.LCD_RESET | self.LCD_LIGHT)
+            time.sleep(0.05)
+            
+            # Включаем оба чипа KS0108
+            self._cmd(self.LCD_ON, self.LCD_CS1)
+            self._cmd(self.LCD_ON, self.LCD_CS2)
+            
+            self.clear()
             self.enabled = True
-            logger.info("LCD дисплей инициализирован")
+            logger.info("Графический LCD 128x64 (MCP23017) успешно инициализирован")
         except Exception as e:
-            logger.error(f"Ошибка инициализации LCD: {e}")
+            logger.error(f"Ошибка инициализации LCD: {e}. Проверьте адрес (обычно 0x20) и подключение I2C.")
             self.enabled = False
-    
-    def _write_byte(self, data, mode=0):
-        """Запись байта в дисплей"""
-        if not self.bus:
-            return
-        try:
-            self.bus.write_byte_data(self.addr, mode, data)
-            time.sleep(0.001)
-        except:
-            pass
-    
-    def _send_command(self, cmd):
-        """Отправка команды"""
-        self._write_byte(cmd, 0x00)
-    
-    def _send_data(self, data):
-        """Отправка данных"""
-        self._write_byte(data, 0x40)
-    
-    def _init(self):
-        """Инициализация дисплея"""
-        time.sleep(0.05)
-        # Последовательность инициализации для HD44780
-        self._send_command(0x33)
-        time.sleep(0.005)
-        self._send_command(0x32)
-        time.sleep(0.005)
-        self._send_command(0x28)  # 4-bit mode, 2 lines, 5x8 font
-        self._send_command(0x0C)  # Display on, cursor off
-        self._send_command(0x06)  # Increment cursor
-        self._send_command(0x01)  # Clear display
-        time.sleep(0.002)
-    
-    def clear(self):
-        """Очистка дисплея"""
-        if self.enabled:
-            self._send_command(0x01)
-            time.sleep(0.002)
-    
-    def set_cursor(self, row, col):
-        """Установка курсора (row: 0 или 1, col: 0-15)"""
-        if not self.enabled:
-            return
-        addr = 0x80 if row == 0 else 0xC0
-        addr += col
-        self._send_command(addr)
-    
-    def write_string(self, text):
-        """Вывод строки"""
-        if not self.enabled:
-            return
-        for char in text[:16]:  # Максимум 16 символов
-            self._send_data(ord(char))
-    
-    def display_data(self, weather_data):
-        """Отображение данных на дисплее"""
-        if not self.enabled:
-            return
+
+    def _write_port_a(self, val):
+        self.bus.write_byte_data(self.addr, self.GPIOA, val)
+
+    def _write_port_b(self, val):
+        self.bus.write_byte_data(self.addr, self.GPIOB, val)
+
+    def _send(self, data, rs, cs):
+        """Отправка байта с формированием импульса Enable"""
+        base = self.LCD_RESET | self.LCD_LIGHT | rs | cs
         
+        self._write_port_b(data)               # Кладем данные на порт B
+        self._write_port_a(base | self.LCD_ENABLE) # Поднимаем Enable
+        time.sleep(0.000002)                   # Задержка 2 мкс (KS0108 требует >450нс)
+        self._write_port_a(base)               # Опускаем Enable
+
+    def _cmd(self, data, cs):
+        self._send(data, 0x00, cs)
+
+    def _data(self, data, cs):
+        self._send(data, self.LCD_DATA, cs)
+
+    def gotoxy(self, x, y):
+        """Установка курсора (x: 0-127, y: 0-63)"""
+        if x >= 64:
+            cs = self.LCD_CS2
+            x -= 64
+        else:
+            cs = self.LCD_CS1
+        
+        page = y >> 3  # Делим на 8, так как страница = 8 пикселей по высоте
+        self._cmd(self.LCD_SET_PAGE | page, cs)
+        self._cmd(self.LCD_SET_ADD | (x & 0x3F), cs)
+
+    def clear(self):
+        """Очистка экрана (заполнение нулями)"""
+        for page in range(8):
+            # Очищаем левую половину (CS1)
+            self._cmd(self.LCD_SET_PAGE | page, self.LCD_CS1)
+            self._cmd(self.LCD_SET_ADD | 0, self.LCD_CS1)
+            for _ in range(64):
+                self._data(0x00, self.LCD_CS1)
+            
+            # Очищаем правую половину (CS2)
+            self._cmd(self.LCD_SET_PAGE | page, self.LCD_CS2)
+            self._cmd(self.LCD_SET_ADD | 0, self.LCD_CS2)
+            for _ in range(64):
+                self._data(0x00, self.LCD_CS2)
+        self.gotoxy(0, 0)
+
+    def draw_char(self, x, y, char):
+        """Вывод одного символа"""
+        if ord(char) < 32 or ord(char) > 126:
+            char = '?'
+        idx = ord(char) - 32
+        glyph = FONT_5x8[idx]
+        
+        for i in range(5):
+            if x >= 128: break
+            self.gotoxy(x, y)
+            cs = self.LCD_CS2 if x >= 64 else self.LCD_CS1
+            self._data(glyph[i], cs)
+            x += 1
+        
+        # 1 пиксель отступа между символами
+        if x < 128:
+            self.gotoxy(x, y)
+            cs = self.LCD_CS2 if x >= 64 else self.LCD_CS1
+            self._data(0x00, cs)
+
+    def draw_text(self, x, y, text):
+        """Вывод строки"""
+        for char in text:
+            self.draw_char(x, y, char)
+            x += 6  # 5 пикселей ширина + 1 пиксель отступ
+
+    def display_data(self, data):
+        """Отображение данных на графическом дисплее"""
+        if not self.enabled: return
         self.clear()
         
-        # Первая строка: Arduino данные
-        arduino = weather_data.get('arduino', {})
+        # Заголовок
+        self.draw_text(0, 0, "Weather Station")
+        
+        # Данные Arduino (Y=16)
+        arduino = data.get('arduino', {})
         temp = arduino.get('temp')
         humid = arduino.get('humid')
-        
         if temp is not None and humid is not None:
-            line1 = f"A:{temp:.1f}C H:{humid:.0f}%"
+            line1 = f"Arduino: {temp:.1f}C {humid:.0f}%"
         else:
             line1 = "Arduino: No data"
-        
-        self.set_cursor(0, 0)
-        self.write_string(line1)
-        
-        # Вторая строка: Elbear данные
-        elbear = weather_data.get('elbear', {})
+        self.draw_text(0, 16, line1)
+
+        # Данные Elbear (Y=32)
+        elbear = data.get('elbear', {})
         temp_e = elbear.get('THP80_temp')
         press = elbear.get('THP80_press')
-        
         if temp_e is not None and press is not None:
-            line2 = f"E:{temp_e:.1f}C P:{press:.0f}"
+            line2 = f"Elbear: {temp_e:.1f}C {press:.0f}mm"
         else:
             line2 = "Elbear: No data"
+        self.draw_text(0, 32, line2)
         
-        self.set_cursor(1, 0)
-        self.write_string(line2)
+        # Статус (Y=48)
+        last_upd = data.get('last_update')
+        if last_upd:
+            # Выводим только время (последние 8 символов)
+            time_str = last_upd.split('T')[1][:8] if 'T' in last_upd else last_upd[:8]
+            self.draw_text(0, 48, f"Updated: {time_str}")
+        else:
+            self.draw_text(0, 48, "Waiting for data...")
+
 
 def lcd_update_loop(lcd, interval=5):
     """Периодическое обновление LCD дисплея"""
@@ -200,7 +289,7 @@ def handle_bluetooth_data(source, json_str):
             weather_data['arduino'].update({
                 'temp': data.get('temp'),
                 'humid': data.get('humid'),
-                'press': data.get('press'),
+                'press': data.get('press') / 133.3,
                 'timestamp': now
             })
             logger.info(f"[Arduino] Temp: {data.get('temp')}, Hum: {data.get('humid')}")
@@ -310,8 +399,7 @@ def main():
     elbear_bt  = BluetoothSerialClient(PORT_ELBEAR,  'Elbear')
 
     # Инициализация LCD дисплея
-    lcd = LCDDisplay()
-    
+    lcd = GraphicalLCDDisplay(i2c_addr=0x20)
     # Запуск потока обновления LCD
     if lcd.enabled:
         lcd_thread = threading.Thread(
