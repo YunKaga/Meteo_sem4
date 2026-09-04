@@ -14,7 +14,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , m_networkManager(new QNetworkAccessManager(this))
     , m_timer(new QTimer(this))
-    , m_serverUrl("http://localhost:5000/api/data")
+    , m_serverUrl("http://10.42.0.231:5000/api/data")
 {
     setWindowTitle("Weather Station Client");
     setMinimumSize(800, 600);

@@ -19,12 +19,9 @@ String Sensors::readData() {
     float tmp_bmp = bmp.readTemperature();
 
     // Формируем пакет для Raspberry Pi сервера:
-    // ARDUINO|LM75A_TEMP|DHT_TEMP|DHT_HUM|BMP_TEMP|BMP_PRESS|TIMESTAMP
-    String packet = "ARDUINO|";
-    packet += String(tmp_lm75, 1) + "|";
-    packet += String(hum_dht, 1) + "|";
-    packet += String(press_bmp, 1) + "|";
-    packet += "0"; // Плейсхолдер для timestamp (сервер подставит свой)
+    String packet = "{\"temp\": " + String(tmp_lm75, 1) + ", ";
+    packet += "\"humid\": " + String(hum_dht, 1) + ", ";
+    packet += "\"press\": " + String(press_bmp, 1) + "}";
 
     return packet;
 }

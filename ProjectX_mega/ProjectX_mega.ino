@@ -13,5 +13,5 @@ void loop() {
     String data = sensors.readData();
     Serial.println(data);
     Serial1.println(data);
-    delay(2000);
+    delay(5000);
 }

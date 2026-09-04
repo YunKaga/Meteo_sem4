@@ -9,5 +9,5 @@ void setup() {
 
 void loop() {
     sensorHub.readAllSensors();
-    delay(2000);
+    delay(5000);
 }
