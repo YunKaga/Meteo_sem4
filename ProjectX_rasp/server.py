@@ -7,13 +7,24 @@ import threading
 import time
 import logging
 import serial
+import os
 from datetime import datetime
 from flask import Flask, jsonify, render_template_string
 from flask_socketio import SocketIO
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(name)s] %(levelname)s: %(message)s')
+LOG_FILE = "weather_station.log"
 logger = logging.getLogger('server')
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter('%(asctime)s [%(name)s] %(levelname)s: %(message)s')
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+file_handler = logging.FileHandler(LOG_FILE, encoding='utf-8')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 # Порты rfcomm, которые мы настроили в /etc/bluetooth/rfcomm.conf
 PORT_ARDUINO = '/dev/rfcomm1'
